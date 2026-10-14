@@ -275,6 +275,12 @@ html[data-theme="light"]{color-scheme:light}
 .chat-compose .input{flex:1;min-width:0}
 .chat-input{resize:none;max-height:110px;line-height:1.4;padding:9px 12px;border-radius:14px}
 .chat-send{padding:10px 18px;border-radius:14px}
+
+/* ===== chat: many names per device ===== */
+.chat-top{flex-wrap:wrap}
+.chat-who{display:flex;align-items:center;gap:2px;margin-left:auto}
+.chat-who-sel{padding:4px 6px;font-size:12px;min-height:30px;max-width:160px;width:auto;flex:0 1 auto}
+.chat-ico{border:0;background:transparent;color:var(--muted);font-size:15px;padding:4px 6px}
 </style>
 </head>
 <body>
@@ -328,7 +334,7 @@ html[data-theme="light"]{color-scheme:light}
 <div class="page-head"><div><div class="eyebrow">TEAM CHAT</div><h1>💬 ห้องสนทนา</h1><p>ห้องรวมสำหรับทุกทีม · เห็นข้อความของทุกคนในห้องเดียว</p></div></div>
 <div id="chatNotice"></div>
 <div class="card chat-box" id="chatBox">
-<div class="chat-top"><span id="chatStatus" class="chat-status"></span><button type="button" class="chat-name-btn" id="chatNameBtn" onclick="chatEditName()"></button></div>
+<div class="chat-top"><span id="chatStatus" class="chat-status"></span><span class="chat-who" id="chatWho"><select class="select chat-who-sel" id="chatWhoSel" aria-label="ส่งข้อความในชื่อ" onchange="chatWhoChange(this.value)"></select><button type="button" class="chat-ico" onclick="chatEditName()" title="เปลี่ยนชื่อนี้" aria-label="เปลี่ยนชื่อ">✏️</button><button type="button" class="chat-ico" onclick="chatRemoveProfile()" title="ลบชื่อนี้ออกจากเครื่อง" aria-label="ลบชื่อนี้">✕</button></span></div>
 <div class="chat-list" id="chatList" onscroll="chatOnScroll()"></div>
 <button type="button" class="chat-new" id="chatNew" onclick="chatRender(true)" hidden>⬇ ข้อความใหม่</button>
 <div class="chat-compose" id="chatCompose"></div>
@@ -462,9 +468,28 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 function logoImg(t,cls=""){return `<img class="${cls}" src="${t.logo||''}" alt="${esc(t.name)}" onerror="this.style.visibility='hidden'">`}
 function fmtDate(ts){if(!ts)return "-";const d=new Date(ts);return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear()}
 /* ---------- ห้องสนทนา (ห้องรวมห้องเดียว) : ใช้ Apps Script/Google Sheet ตัวเดียวกับระบบซิงค์ ---------- */
-const CHAT_ME_KEY="peLeagueChatMe",CHAT_SEEN_KEY="peLeagueChatSeen";
+const CHAT_ME_KEY="peLeagueChatMe",CHAT_PROF_KEY="peLeagueChatProfiles",CHAT_SEEN_KEY="peLeagueChatSeen";
 const chat={msgs:{},last:0,pending:[],sig:"",hasMore:false,err:"",old:false,busy:false,timer:null,on:false,okAt:0,unread:0,lastSend:0,prevMax:0,loaded:false};
-function chatMe(){let m=null;try{m=JSON.parse(localStorage.getItem(CHAT_ME_KEY)||"null")}catch(e){}if(!m||!m.c){m={n:(m&&m.n)||"",c:"d"+Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4)};try{localStorage.setItem(CHAT_ME_KEY,JSON.stringify(m))}catch(e){}}return m}
+function chatLoadP(){let o=null;try{o=JSON.parse(localStorage.getItem(CHAT_PROF_KEY)||"null")}catch(e){}
+ if(!o||!Array.isArray(o.l)){o={l:[],cur:""};try{const old=JSON.parse(localStorage.getItem(CHAT_ME_KEY)||"null");if(old&&old.n&&old.c)o={l:[{n:old.n,c:old.c}],cur:old.c}}catch(e){}}
+ if(!o.l.some(p=>p.c===o.cur))o.cur=o.l[0]?o.l[0].c:"";return o}
+function chatSaveP(o){try{localStorage.setItem(CHAT_PROF_KEY,JSON.stringify(o))}catch(e){}}
+function chatMe(){const o=chatLoadP(),p=o.l.find(x=>x.c===o.cur);return p?{n:p.n,c:p.c}:{n:"",c:""}}
+function chatNewCid(){return "d"+Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4)}
+function chatCleanName(v){return String(v||"").replace(/\s+/g," ").trim().slice(0,24)}
+function chatNameOk(n,exceptCid){const o=chatLoadP();
+ if(o.l.some(p=>p.c!==exceptCid&&p.n.toLowerCase()===n.toLowerCase())){toast("มีชื่อนี้ในเครื่องนี้แล้ว");return false}
+ const other=Object.values(chat.msgs).some(m=>m.n&&m.n.toLowerCase()===n.toLowerCase()&&!o.l.some(p=>p.c===m.c));
+ if(other&&!confirm("มีคนใช้ชื่อ “"+n+"” ในห้องแล้ว (จากเครื่องอื่น)\nยังต้องการใช้ชื่อนี้หรือไม่?"))return false;return true}
+function chatProfileChanged(){chat.sig="";chatSyncCompose.k=null;chatStatus();chatRenderCompose();chatRender(true)}
+function chatAddProfile(n){const o=chatLoadP(),p={n,c:chatNewCid()};o.l.push(p);o.cur=p.c;chatSaveP(o);chatProfileChanged()}
+function chatWhoRender(){const o=chatLoadP(),box=$("chatWho");if(!box)return;box.style.display=o.l.length?"":"none";
+ $("chatWhoSel").innerHTML=o.l.map(p=>`<option value="${esc(p.c)}" ${p.c===o.cur?"selected":""}>👤 ${esc(p.n)}</option>`).join("")+'<option value="__new">＋ สร้างชื่อใหม่…</option>'}
+function chatWhoChange(v){
+ if(v==="__new"){const n=chatCleanName(prompt("สร้างชื่อใหม่สำหรับห้องแชท (เช่น ชื่อคนที่จะใช้เครื่องนี้)",""));if(n&&chatNameOk(n,""))chatAddProfile(n);else chatWhoRender();return}
+ const o=chatLoadP();if(o.l.some(p=>p.c===v)){o.cur=v;chatSaveP(o);chatProfileChanged();const i=$("chatInput");if(i)i.focus()}}
+function chatRemoveProfile(){const m=chatMe();if(!m.c)return;if(!confirm("ลบชื่อ “"+m.n+"” ออกจากเครื่องนี้?\nข้อความที่เคยส่งยังอยู่ในห้อง แต่จะลบข้อความเหล่านั้นไม่ได้อีก"))return;
+ const o=chatLoadP();o.l=o.l.filter(p=>p.c!==m.c);o.cur=o.l[0]?o.l[0].c:"";chatSaveP(o);chatProfileChanged();toast("ลบชื่อออกจากเครื่องนี้แล้ว")}
 function chatSeen(){try{const v=localStorage.getItem(CHAT_SEEN_KEY);return v===null?null:+v}catch(e){return null}}
 function chatSetSeen(v){try{localStorage.setItem(CHAT_SEEN_KEY,String(v))}catch(e){}}
 function chatActive(){const p=$("chat");return !!p&&p.classList.contains("active")}
@@ -477,27 +502,27 @@ async function chatPostReq(body){
  try{const r=await fetch(c.url,opt);return await r.json()}
  catch(e){if(e instanceof TypeError){await fetch(c.url,{...opt,mode:"no-cors"});return {ok:true,unverified:true}}throw e}}
 function chatMerge(list){(list||[]).forEach(m=>{if(m&&m.s){chat.msgs[m.s]=m;if(m.s>chat.last)chat.last=m.s}});
- const me=chatMe().c;chat.pending=chat.pending.filter(p=>!Object.values(chat.msgs).some(m=>m.c===me&&!m.d&&m.x===p.x&&new Date(m.t)>=new Date(p.t)-5000))}
+ chat.pending=chat.pending.filter(p=>!Object.values(chat.msgs).some(m=>m.c===p.c&&!m.d&&m.x===p.x&&new Date(m.t)>=new Date(p.t)-5000))}
 function chatBadge(){document.querySelectorAll('.nav[data-page="chat"] .ico').forEach(ic=>{let b=ic.querySelector(".nav-badge");if(!b){b=document.createElement("b");b.className="nav-badge";ic.appendChild(b)}b.hidden=!chat.unread;b.textContent=chat.unread>99?"99+":chat.unread})}
 function chatMarkSeen(){chatSetSeen(chat.last);chat.unread=0;chatBadge()}
 function chatStatus(){
  const el=$("chatStatus");if(!el)return;const c=sheetCfg();
  el.textContent=!c.url?"ยังไม่ได้ตั้งค่า":chat.old?"⚠ สคริปต์เป็นเวอร์ชันเก่า":chat.err?"⚠ "+chat.err:chat.okAt?"● ออนไลน์ · อัปเดต "+new Date(chat.okAt).toLocaleTimeString("th-TH-u-ca-gregory",{hour:"2-digit",minute:"2-digit",second:"2-digit"}):"กำลังเชื่อมต่อ…";
  el.className="chat-status"+((chat.err||chat.old||!c.url)?" bad":"");
- const n=chatMe().n;$("chatNameBtn").textContent=n?"👤 "+n+" ✏️":"";$("chatNameBtn").style.display=n?"":"none";
+ chatWhoRender();
  const nt=$("chatNotice");
  nt.innerHTML=!c.url?`<div class="banner"><span>ห้องสนทนาใช้ Google Sheet ตัวเดียวกับระบบซิงค์ — วาง Web App URL ในหน้าตั้งค่าก่อน</span><button class="btn secondary" onclick="showPage('settings')">ไปตั้งค่า</button></div>`:chat.old?`<div class="banner"><span>Apps Script ยังเป็นเวอร์ชันเก่า ห้องสนทนาต้องใช้ v3.12 ขึ้นไป: ตั้งค่า → คัดลอกโค้ด Apps Script → วางทับในชีต → Deploy → New version</span><button class="btn secondary" onclick="showPage('settings')">ไปตั้งค่า</button></div>`:"";
 }
 function chatRenderCompose(){
  const el=$("chatCompose");if(!el)return;const c=sheetCfg(),me=chatMe();
  if(!c.url||chat.old){el.innerHTML='<div class="chat-hint">ตั้งค่าการเชื่อมต่อก่อนจึงจะส่งข้อความได้</div>';return}
- if(!me.n){el.innerHTML='<input class="input" id="chatNameIn" maxlength="24" placeholder="ตั้งชื่อที่ใช้แสดงในห้องแชท" onkeydown="if(event.key===\'Enter\')chatSetName()"><button type="button" class="btn primary" onclick="chatSetName()">เริ่มแชท</button>';return}
- el.innerHTML='<textarea class="input chat-input" id="chatInput" rows="1" maxlength="500" placeholder="พิมพ์ข้อความ…" oninput="chatGrow(this)" onkeydown="chatKey(event)"></textarea><button type="button" class="btn primary chat-send" onclick="chatSend()" aria-label="ส่ง">ส่ง</button>';
+ if(!me.n){el.innerHTML='<input class="input" id="chatNameIn" maxlength="24" placeholder="ตั้งชื่อที่ใช้แสดงในห้องแชท (เช่น ชื่อของคุณ)" onkeydown="if(event.key===\'Enter\')chatSetName()"><button type="button" class="btn primary" onclick="chatSetName()">เริ่มแชท</button>';return}
+ el.innerHTML='<textarea class="input chat-input" id="chatInput" rows="1" maxlength="500" placeholder="พิมพ์ข้อความในชื่อ '+esc(me.n)+'…" oninput="chatGrow(this)" onkeydown="chatKey(event)"></textarea><button type="button" class="btn primary chat-send" onclick="chatSend()" aria-label="ส่ง">ส่ง</button>';
 }
 function chatGrow(t){t.style.height="auto";t.style.height=Math.min(t.scrollHeight,110)+"px"}
 function chatKey(e){if(e.key==="Enter"&&!e.shiftKey&&window.matchMedia&&matchMedia("(pointer:fine)").matches){e.preventDefault();chatSend()}}
-function chatSetName(){const v=($("chatNameIn").value||"").replace(/\s+/g," ").trim().slice(0,24);if(!v){toast("กรุณาพิมพ์ชื่อ");return}const m=chatMe();m.n=v;try{localStorage.setItem(CHAT_ME_KEY,JSON.stringify(m))}catch(e){}chatRenderCompose();chat.sig="";chatRender(true);chatStatus();setTimeout(()=>{const i=$("chatInput");if(i)i.focus()},50)}
-function chatEditName(){const m=chatMe(),v=prompt("เปลี่ยนชื่อที่ใช้แสดงในห้องแชท",m.n);if(v===null)return;const n=v.replace(/\s+/g," ").trim().slice(0,24);if(!n)return;m.n=n;try{localStorage.setItem(CHAT_ME_KEY,JSON.stringify(m))}catch(e){}chatStatus();toast("เปลี่ยนชื่อแล้ว (ข้อความเก่ายังใช้ชื่อเดิม)")}
+function chatSetName(){const v=chatCleanName($("chatNameIn").value);if(!v){toast("กรุณาพิมพ์ชื่อ");return}if(!chatNameOk(v,""))return;chatAddProfile(v);setTimeout(()=>{const i=$("chatInput");if(i)i.focus()},50)}
+function chatEditName(){const m=chatMe();if(!m.c)return;const n=chatCleanName(prompt("เปลี่ยนชื่อ (ข้อความเก่ายังใช้ชื่อเดิม)",m.n));if(!n||n===m.n)return;if(!chatNameOk(n,m.c))return;const o=chatLoadP();o.l.find(p=>p.c===m.c).n=n;chatSaveP(o);chatProfileChanged();toast("เปลี่ยนชื่อแล้ว")}
 function chatDayLabel(d){const t=new Date(),y=new Date(Date.now()-864e5);return d.toDateString()===t.toDateString()?"วันนี้":d.toDateString()===y.toDateString()?"เมื่อวาน":String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear()}
 function chatHue(s){let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))%360;return h}
 function chatLink(t){return esc(t).replace(/(https?:\/\/[^\s<]+)/g,u=>'<a href="'+u+'" target="_blank" rel="noopener noreferrer">'+u+'</a>')}
@@ -515,7 +540,7 @@ function chatRender(forceBottom){
  let html=chat.hasMore?'<button type="button" class="chat-more" onclick="chatMore()">โหลดข้อความเก่า</button>':"",day="";
  if(!list.length&&!chat.pending.length)html+=chat.loaded?'<div class="chat-empty">ยังไม่มีข้อความ — เริ่มคุยเป็นคนแรกได้เลย 👋</div>':'<div class="chat-empty">กำลังโหลดข้อความ…</div>';
  list.forEach(m=>{const d=new Date(m.t);if(!isNaN(d)&&d.toDateString()!==day){day=d.toDateString();html+=`<div class="chat-day">${chatDayLabel(d)}</div>`}html+=chatBubble(m,m.c===me.c)});
- chat.pending.forEach(p=>{html+=chatBubble({n:me.n,x:p.x,t:p.t,tmp:p.tmp,d:0},true,p.st)});
+ chat.pending.forEach(p=>{html+=chatBubble({n:p.n,x:p.x,t:p.t,tmp:p.tmp,d:0},true,p.st)});
  el.innerHTML=html;
  const grew=max>chat.prevMax&&chat.prevMax>0;chat.prevMax=max;
  if(forceBottom||atBottom||chat.pending.some(p=>p.st==="sending")){el.scrollTop=el.scrollHeight;$("chatNew").hidden=true}
@@ -561,13 +586,13 @@ async function chatSend(){
  const inp=$("chatInput");if(!inp)return;const text=inp.value.replace(/\r/g,"").trim(),me=chatMe();
  if(!text)return;if(!me.n){chatRenderCompose();return}
  if(Date.now()-chat.lastSend<1200){toast("ส่งเร็วเกินไป รอสักครู่");return}chat.lastSend=Date.now();
- const p={tmp:"p"+Date.now()+Math.random().toString(36).slice(2,5),x:text.slice(0,500),t:new Date().toISOString(),st:"sending"};
+ const p={tmp:"p"+Date.now()+Math.random().toString(36).slice(2,5),x:text.slice(0,500),t:new Date().toISOString(),st:"sending",n:me.n,c:me.c};
  chat.pending.push(p);inp.value="";chatGrow(inp);chatRender(true);chatDoSend(p);
 }
 async function chatDoSend(p){
- const me=chatMe();p.st="sending";
+ p.st="sending";
  try{
-  const r=await chatPostReq({action:"chatPost",name:me.n,text:p.x,cid:me.c});
+  const r=await chatPostReq({action:"chatPost",name:p.n,text:p.x,cid:p.c});
   if(r&&r.ok===false)throw Error(r.error||"ส่งไม่สำเร็จ");
   if(r&&r.msg){chat.pending=chat.pending.filter(x=>x.tmp!==p.tmp);chatMerge([r.msg]);chatSetSeen(Math.max(chatSeen()||0,r.msg.s));chatRender(true)}
   else{chatRender();setTimeout(chatKick,1500)}
