@@ -1,5 +1,5 @@
 /**
- * PE League 2026 - Google Sheets Sync (Apps Script Web App)  v3.13
+ * PE League 2026 - Google Sheets Sync (Apps Script Web App)  v3.14
  * วิธีใช้: เปิด Google Sheet -> ส่วนขยาย -> Apps Script -> วางโค้ดนี้ (ทับของเดิมทั้งหมด) -> Deploy เป็น Web app
  *   Execute as: Me   |   Who has access: Anyone
  *   ถ้าแก้โค้ด ต้อง Deploy > Manage deployments > Edit > Version: New version ทุกครั้ง
@@ -13,7 +13,8 @@
  * v3.12: เพิ่ม "ห้องสนทนา" (ห้องรวมห้องเดียว) เก็บข้อความในแท็บ Chat (อย่าแก้หัวตาราง; ลบแถวข้อความได้ที่ชีตโดยตรง)
  *
  * แท็บที่เขียนให้อัตโนมัติ:
- *   Leaderboard  ตารางคะแนนของ Season ปัจจุบัน
+ *   Leaderboard  ตารางคะแนนของรายการปัจจุบันเท่านั้น (เขียนทับได้)
+ *   Leaderboard_History  ตารางคะแนนของรายการที่จบแล้ว เก็บประวัติแยก
  *   Schedule     ตารางแข่งขันทุกสัปดาห์ ทุก Season (พร้อมผู้ชนะ/สถานะ)
  *   TopScorers   ดาวซัลโว / MVP / GK ยอดเยี่ยม ของแต่ละ Season
  *   ประวัติการแข่งขัน  แชมป์-รองแชมป์ของ Season ที่จบแล้ว (ชื่อแท็บตั้งได้ที่ TAB_NAMES)
@@ -22,7 +23,7 @@
  * แท็บอื่นที่คุณสร้างเอง (เช่น Sheet5) จะไม่ถูกแตะต้อง
  */
 var SECRET = ""; // เช่น "pe2026-abc"  (เว้นว่าง = ไม่ใช้รหัส)
-var VERSION = "3.13";
+var VERSION = "3.14";
 
 // ชื่อแท็บในชีต: ถ้าเปลี่ยนชื่อแท็บ ให้แก้ตรงนี้ (ซ้าย = ชื่อภายในที่แอปส่งมา, ขวา = ชื่อแท็บจริงในชีต)
 var TAB_NAMES = {
